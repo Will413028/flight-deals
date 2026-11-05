@@ -62,10 +62,24 @@ def cmd_run(args: argparse.Namespace) -> int:
     notify = not args.dry_run
     token = _env("TELEGRAM_BOT_TOKEN") if notify else ""
     chat = _env("TELEGRAM_CHAT_ID") if notify else ""
-    store = Store(args.db)
+    store = Store(args.db, readonly=args.dry_run)
     now = datetime.now(TZ).replace(microsecond=0)
     start, end = search_window(now.date())
     dests = DESTINATIONS[: args.limit] if args.limit else DESTINATIONS
+    try:
+        totals = _run_destinations(dests, store, now, start, end, args, notify, token, chat)
+    finally:
+        store.prune(now - DEFAULT.window - timedelta(days=1))
+        store.close()
+    ok, failed, saved, alerts, notify_failed = totals
+    print(
+        f"destinations ok={ok} failed={failed} prices_saved={saved} "
+        f"alerts={alerts} notify_failed={notify_failed}"
+    )
+    return 1 if ok == 0 else 0
+
+
+def _run_destinations(dests, store, now, start, end, args, notify, token, chat):
     ok = failed = saved = alerts = notify_failed = 0
     for i, d in enumerate(dests):
         if i:
@@ -98,13 +112,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             store.save_alert(q)
             store.commit()  # record the sent alert at once so a crash cannot resend it
         store.commit()
-    store.prune(now - DEFAULT.window - timedelta(days=1))
-    store.close()
-    print(
-        f"destinations ok={ok} failed={failed} prices_saved={saved} "
-        f"alerts={alerts} notify_failed={notify_failed}"
-    )
-    return 1 if ok == 0 else 0
+    return ok, failed, saved, alerts, notify_failed
 
 
 def cmd_test_notify(_: argparse.Namespace) -> int:

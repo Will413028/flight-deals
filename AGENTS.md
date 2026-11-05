@@ -16,7 +16,7 @@ Personal tool: alert on unusually cheap round-trip economy fares (≤ 1 stop) fr
 
 - Prices come from Google Flights' internal calendar endpoint through the `flights` package (fli), which reverse-engineers it; it is pinned. When fetches start failing for every destination, upgrade `flights` first. This scraping is against Google's terms; keep request volume low: the run sleeps 1–2 s between destinations and `fetch.py` sets fli's private `configure_concurrency(1)` so its 61-day chunks are fetched one at a time.
 - The search window ends on a month boundary (`cli.search_window`); a rolling end date would grow the last month's series every day and fake price drops.
-- `--dry-run` saves prices but never alert rows, so it cannot suppress a real alert.
+- `--dry-run` opens the store read-only: nothing it fetches or alerts is written, so it cannot suppress a real alert or pollute history.
 - `flights` 0.9.0 imports `click` without declaring it, hence the explicit dependency.
 - Alert rule (confirmed by Will): price ≤ 75% of the 30-day median of the same destination + departure month, only after ≥ 7 days of history; re-alert only after a further 5% drop. Tests in `tests/test_deal.py` encode each case.
 - Never log Telegram request URLs: they contain the bot token.

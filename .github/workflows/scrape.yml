@@ -15,7 +15,7 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120 # a full run took 38 min locally on 2026-11-05
     permissions:
       contents: write # push the price history to the data branch
     steps:
@@ -26,17 +26,13 @@ jobs:
       - run: uv sync --frozen
       - name: Load price history
         env:
-          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-        run: |
-          git config --global user.name "flight-deals bot"
-          git config --global user.email "flight-deals-bot@users.noreply.github.com"
-          url="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+        run: | # public repo: read without a token, so none is on disk while the scraper runs
+          url="https://github.com/${REPO}.git"
           if git ls-remote --exit-code "$url" data >/dev/null; then
             git clone --quiet --depth 1 --branch data "$url" data
           else
             git init --quiet -b data data
-            git -C data remote add origin "$url"
           fi
       - name: Fetch prices and alert
         env:
@@ -44,7 +40,13 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: uv run flight-deals run --db data/prices.sql
       - name: Save price history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           git -C data add prices.sql
-          git -C data commit --quiet -m "Update prices $(date -u +%FT%TZ)" || exit 0
-          git -C data push --quiet origin data
+          if git -C data diff --cached --quiet; then exit 0; fi
+          git -C data -c user.name="flight-deals bot" \
+            -c user.email="flight-deals-bot@users.noreply.github.com" \
+            commit --quiet -m "Update prices $(date -u +%FT%TZ)"
+          git -C data push --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" HEAD:data

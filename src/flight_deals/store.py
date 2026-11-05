@@ -7,6 +7,7 @@ text diffs stay small and a binary database file would not.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -33,7 +34,8 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 
 class Store:
-    def __init__(self, path: str):
+    def __init__(self, path: str, readonly: bool = False):
+        self.readonly = readonly  # dry runs: changes stay in memory and are never written
         self.dump = Path(path) if path.endswith(".sql") else None
         self.db = sqlite3.connect(":memory:" if self.dump else path)
         if self.dump and self.dump.exists():
@@ -46,9 +48,7 @@ class Store:
         self.db.execute("DELETE FROM alerts WHERE sent_at < ?", (before.isoformat(),))
 
     def close(self) -> None:
-        self.db.commit()
-        if self.dump:
-            self.dump.write_text("\n".join(self.db.iterdump()) + "\n")
+        self.commit()
         self.db.close()
 
     def history(self, q: Quote, window: timedelta) -> list[Observation]:
@@ -81,4 +81,11 @@ class Store:
         )
 
     def commit(self) -> None:
+        """Make everything so far durable; for a dump, rewrite it atomically."""
+        if self.readonly:
+            return
         self.db.commit()
+        if self.dump:
+            tmp = self.dump.with_suffix(".sql.tmp")
+            tmp.write_text("\n".join(self.db.iterdump()) + "\n")
+            os.replace(tmp, self.dump)

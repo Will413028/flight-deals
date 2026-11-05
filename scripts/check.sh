@@ -1,5 +1,5 @@
 #!/bin/sh
-# Same checks as .github/workflows/ci.yml. Run by the pre-push hook: scripts/install-hooks.sh
+# The checks .github/workflows/ci.yml runs (gitleaks and osv-scanner as CLIs here, as actions there). Run by the pre-push hook: scripts/install-hooks.sh
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 uv lock --check

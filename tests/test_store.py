@@ -24,3 +24,19 @@ def test_sql_dump_round_trip_and_prune(tmp_path):
     probe = q(7000, NOW)
     assert [o.price for o in reopened.history(probe, timedelta(days=60))] == [8000]
     assert reopened.last_alert_price(probe, timedelta(days=30)) == 8000
+
+
+def test_committed_alert_survives_without_close(tmp_path):
+    path = str(tmp_path / "prices.sql")
+    s = Store(path)
+    s.save_alert(q(8000, NOW))
+    s.commit()  # process dies here: close() never runs
+    assert Store(path).last_alert_price(q(7000, NOW), timedelta(days=30)) == 8000
+
+
+def test_readonly_store_writes_nothing(tmp_path):
+    path = tmp_path / "prices.sql"
+    s = Store(str(path), readonly=True)
+    s.save_price(q(8000, NOW))
+    s.close()
+    assert not path.exists()
