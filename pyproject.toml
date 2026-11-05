@@ -1,0 +1,23 @@
+[project]
+name = "flight-deals"
+version = "0.1.0"
+description = "Alert on unusually cheap round-trip fares from TPE"
+requires-python = ">=3.12"
+dependencies = [
+    "flights==0.9.0",
+    "click",  # flights 0.9.0 imports it without declaring it
+    "httpx",
+]
+
+[project.scripts]
+flight-deals = "flight_deals.cli:main"
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 110

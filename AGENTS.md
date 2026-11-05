@@ -1,0 +1,21 @@
+# flight-deals
+
+Personal tool: alert on unusually cheap round-trip economy fares (≤ 1 stop) from TPE to the destinations in `src/flight_deals/destinations.py`, departing within the next 12 months.
+
+## Commands (run from repo root; verified 2026-11-05)
+
+- `uv sync` — install
+- `uv run pytest -q` — unit tests (alert rules in `src/flight_deals/deal.py`)
+- `uv run ruff check .` — lint
+- `uv run flight-deals check-destinations` — every IATA code resolves in fli
+- `uv run flight-deals run --dry-run --limit 3 --db /tmp/p.db` — live fetch, print alerts instead of sending
+- `flight-deals run` / `test-notify` need `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; `FLIGHT_DEALS_DB` sets the SQLite path
+
+## Contracts and pitfalls
+
+- Prices come from Google Flights' internal calendar endpoint through the `flights` package (fli), which reverse-engineers it; it is pinned. When fetches start failing for every destination, upgrade `flights` first. This scraping is against Google's terms; keep request volume low: the run sleeps 1–2 s between destinations and `fetch.py` sets fli's private `configure_concurrency(1)` so its 61-day chunks are fetched one at a time.
+- The search window ends on a month boundary (`cli.search_window`); a rolling end date would grow the last month's series every day and fake price drops.
+- `--dry-run` saves prices but never alert rows, so it cannot suppress a real alert.
+- `flights` 0.9.0 imports `click` without declaring it, hence the explicit dependency.
+- Alert rule (confirmed by Will): price ≤ 75% of the 30-day median of the same destination + departure month, only after ≥ 7 days of history; re-alert only after a further 5% drop. Tests in `tests/test_deal.py` encode each case.
+- Never log Telegram request URLs: they contain the bot token.
