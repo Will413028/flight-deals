@@ -19,5 +19,9 @@ dev = ["pytest", "ruff"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv]
+# only resolve package versions published at least 7 days ago
+exclude-newer = "7 days"
+
 [tool.ruff]
 line-length = 110

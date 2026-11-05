@@ -98,6 +98,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             store.save_alert(q)
             store.commit()  # record the sent alert at once so a crash cannot resend it
         store.commit()
+    store.prune(now - DEFAULT.window - timedelta(days=1))
+    store.close()
     print(
         f"destinations ok={ok} failed={failed} prices_saved={saved} "
         f"alerts={alerts} notify_failed={notify_failed}"

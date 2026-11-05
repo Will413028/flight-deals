@@ -1,0 +1,50 @@
+name: scrape
+
+on:
+  schedule:
+    - cron: "7 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write # push the price history to the data branch
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv sync --frozen
+      - name: Load price history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          git config --global user.name "flight-deals bot"
+          git config --global user.email "flight-deals-bot@users.noreply.github.com"
+          url="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          if git ls-remote --exit-code "$url" data >/dev/null; then
+            git clone --quiet --depth 1 --branch data "$url" data
+          else
+            git init --quiet -b data data
+            git -C data remote add origin "$url"
+          fi
+      - name: Fetch prices and alert
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: uv run flight-deals run --db data/prices.sql
+      - name: Save price history
+        run: |
+          git -C data add prices.sql
+          git -C data commit --quiet -m "Update prices $(date -u +%FT%TZ)" || exit 0
+          git -C data push --quiet origin data

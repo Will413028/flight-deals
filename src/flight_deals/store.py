@@ -1,9 +1,15 @@
-"""SQLite price history and alert log."""
+"""SQLite price history and alert log.
+
+A path ending in `.sql` is kept as a text dump instead of a database file: loaded into
+memory on open, written back on close. CI stores that dump in git, where row-ordered
+text diffs stay small and a binary database file would not.
+"""
 
 from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from flight_deals.deal import Observation, Quote
 
@@ -28,8 +34,22 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 class Store:
     def __init__(self, path: str):
-        self.db = sqlite3.connect(path)
+        self.dump = Path(path) if path.endswith(".sql") else None
+        self.db = sqlite3.connect(":memory:" if self.dump else path)
+        if self.dump and self.dump.exists():
+            self.db.executescript(self.dump.read_text())
         self.db.executescript(SCHEMA)
+
+    def prune(self, before: datetime) -> None:
+        """Drop rows no rule can read any more (all rules look back at most one window)."""
+        self.db.execute("DELETE FROM prices WHERE seen_at < ?", (before.isoformat(),))
+        self.db.execute("DELETE FROM alerts WHERE sent_at < ?", (before.isoformat(),))
+
+    def close(self) -> None:
+        self.db.commit()
+        if self.dump:
+            self.dump.write_text("\n".join(self.db.iterdump()) + "\n")
+        self.db.close()
 
     def history(self, q: Quote, window: timedelta) -> list[Observation]:
         since = (q.seen_at - window).isoformat()
